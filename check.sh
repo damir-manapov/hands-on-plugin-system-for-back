@@ -18,8 +18,8 @@ else
   echo "Warning: gitleaks not found, skipping..."
 fi
 
-echo "Running tests..."
-pnpm test --run
+echo "Running unit tests..."
+pnpm test:unit
 
 echo "All checks passed!"
 

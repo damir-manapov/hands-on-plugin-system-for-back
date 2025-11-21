@@ -7,6 +7,9 @@ echo ""
 
 ./check.sh
 echo ""
+./e2e.sh
+
+echo ""
 ./health.sh
 
 echo ""

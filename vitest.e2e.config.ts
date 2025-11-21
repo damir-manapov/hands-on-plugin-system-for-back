@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["test/**/*.test.ts"],
-    exclude: ["test/e2e/**/*.test.ts"], // Exclude e2e tests from unit tests
+    include: ["test/e2e/**/*.test.ts"],
+    testTimeout: 30000, // E2E tests may take longer
   },
 });

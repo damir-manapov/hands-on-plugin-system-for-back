@@ -190,7 +190,7 @@ pnpm run compose:reset
 All services include health checks. Check service status:
 
 ```bash
-docker compose ps
+docker compose -f compose/docker-compose.yml ps
 ```
 
 ## Troubleshooting

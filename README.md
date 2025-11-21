@@ -29,6 +29,8 @@ Start infrastructure services (S3, PostgreSQL, Kafka, ksqlDB):
 pnpm run compose:up
 ```
 
+This will start all services and wait for them to be ready. The starter service ensures all services are healthy before completing.
+
 Stop services:
 
 ```bash
@@ -63,8 +65,33 @@ pnpm build
 
 ## Test
 
+Run unit tests:
+
+```bash
+pnpm test:unit
+```
+
+Run e2e tests:
+
+```bash
+# Option 1: Use the e2e script (automatically starts services if needed)
+./e2e.sh
+
+# Option 2: Manual approach
+pnpm run compose:up  # Start services first
+pnpm test:e2e       # Run e2e tests
+```
+
+Run all tests:
+
 ```bash
 pnpm test
+```
+
+Watch mode (unit tests):
+
+```bash
+pnpm test:watch
 ```
 
 ## Checks

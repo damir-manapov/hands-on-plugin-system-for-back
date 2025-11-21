@@ -6,6 +6,8 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
+  CreateBucketCommand,
+  HeadBucketCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -47,7 +49,46 @@ export class S3Service implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    this.logger.log(`S3 Service initialized - Endpoint: ${this.config.endpoint}`);
+    try {
+      // Ensure bucket exists, create if it doesn't
+      await this.ensureBucketExists(this.config.bucket!);
+      this.logger.log(
+        `S3 Service connected to ${this.config.endpoint}, bucket: ${this.config.bucket}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to connect to S3 Service: ${error instanceof Error ? error.message : String(error)}`
+      );
+      // Depending on your application's needs, you might want to throw the error
+      // or handle it gracefully (e.g., retry, use a fallback).
+    }
+  }
+
+  /**
+   * Ensure a bucket exists, create it if it doesn't
+   */
+  async ensureBucketExists(bucketName: string): Promise<void> {
+    try {
+      // Check if bucket exists
+      await this.client.send(new HeadBucketCommand({ Bucket: bucketName }));
+      this.logger.debug(`Bucket ${bucketName} already exists`);
+    } catch (error: unknown) {
+      // If bucket doesn't exist, create it
+      const err = error as { $metadata?: { httpStatusCode?: number } };
+      if (err.$metadata?.httpStatusCode === 404) {
+        try {
+          await this.client.send(new CreateBucketCommand({ Bucket: bucketName }));
+          this.logger.log(`Created bucket: ${bucketName}`);
+        } catch (createError) {
+          this.logger.error(
+            `Failed to create bucket ${bucketName}: ${createError instanceof Error ? createError.message : String(createError)}`
+          );
+          throw createError;
+        }
+      } else {
+        throw error;
+      }
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
