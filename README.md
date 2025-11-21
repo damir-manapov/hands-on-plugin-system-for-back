@@ -12,8 +12,12 @@ Researching plugin system on backend built with NestJS. Plugins are **not** Nest
 - Explicit dependency declaration and validation
 - Dependency injection (plugins can only access declared dependencies)
 - Circular dependency detection
+- **Resource restrictions**: Plugins can only access explicitly declared resources (tables, topics, buckets)
+- **Automatic resource prefixing**: Resources are automatically prefixed with plugin name for isolation
+- **Resource overrides**: Runtime override of resource lists and name mappings
 - Type-safe plugin system
 - Event-driven inter-plugin communication (plugins can emit and subscribe to arbitrary events)
+- **S3, PostgreSQL, and Kafka integration**: Restricted repositories for secure resource access
 
 ## Setup
 

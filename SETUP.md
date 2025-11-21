@@ -36,8 +36,9 @@ You can configure the services using environment variables:
 - `S3_REGION` - AWS region (default: `us-east-1`)
 - `S3_ACCESS_KEY_ID` - Access key (default: `minioadmin`)
 - `S3_SECRET_ACCESS_KEY` - Secret key (default: `minioadmin`)
-- `S3_BUCKET` - Default bucket name (default: `default-bucket`)
 - `S3_FORCE_PATH_STYLE` - Force path-style URLs (default: `true`)
+
+**Note**: Plugins must explicitly declare allowed buckets in their metadata. There is no default bucket.
 
 ### Database (PostgreSQL)
 
@@ -67,59 +68,127 @@ pnpm install
 
 ## Using Services in Plugins
 
-All services are automatically available in the plugin context:
+Plugins access services through **restricted repositories** that enforce access control. You must declare allowed resources in your plugin metadata.
+
+### Resource Restrictions
+
+Plugins must explicitly declare which resources they can access:
+
+- `allowedTables`: Database tables the plugin can access
+- `allowedTopics`: Kafka topics the plugin can access
+- `allowedBuckets`: S3 buckets the plugin can access
+
+**Important**: Only explicitly declared resources are allowed. There are no defaults.
+
+### Basic Plugin Example
 
 ```javascript
 export default {
   metadata: {
     name: "my-plugin",
     version: "1.0.0",
+    // Declare allowed resources
+    allowedTables: ["users", "orders"],
+    allowedTopics: ["user-events", "order-events"],
+    allowedBuckets: ["plugin-data"],
   },
   async initialize(context) {
-    // S3 Service
-    await context.s3.upload("my-file.txt", Buffer.from("Hello World"), "text/plain");
-    const file = await context.s3.download("my-file.txt");
-    const exists = await context.s3.exists("my-file.txt");
-    const files = await context.s3.list("prefix/");
-    const url = await context.s3.getPresignedUrl("my-file.txt", 3600);
+    // S3 Repository - bucket parameter is REQUIRED
+    if (context.s3) {
+      const buckets = context.s3.getAllowedBuckets();
+      console.log("Allowed buckets:", buckets);
 
-    // Database Service (Kysely)
-    const db = context.database.getDb();
-    // Use Kysely query builder
-    const users = await db.selectFrom("users").selectAll().execute();
-
-    // Or execute raw SQL
-    const results = await context.database.executeQuery("SELECT * FROM users WHERE id = $1", [1]);
-
-    // Kafka Service
-    await context.kafka.sendMessage("my-topic", [
-      { key: "key1", value: JSON.stringify({ message: "Hello" }) },
-    ]);
-
-    // Create a consumer
-    const consumer = await context.kafka.createConsumer("my-consumer", "my-group");
-    await context.kafka.subscribe("my-consumer", ["my-topic"], async (payload) => {
-      const message = payload.message.value?.toString();
-      console.log("Received:", message);
-    });
-
-    // ksqlDB
-    await context.kafka.executeKsqlStatement(`
-      CREATE STREAM user_events (
-        user_id VARCHAR,
-        event_type VARCHAR,
-        timestamp BIGINT
-      ) WITH (
-        KAFKA_TOPIC='user-events',
-        VALUE_FORMAT='JSON'
+      // Bucket parameter is required (no defaults)
+      await context.s3.upload(
+        "my-file.txt",
+        Buffer.from("Hello World"),
+        "text/plain",
+        "plugin-data"
       );
-    `);
+      const file = await context.s3.download("my-file.txt", "plugin-data");
+      const exists = await context.s3.exists("my-file.txt", "plugin-data");
+      const files = await context.s3.list("prefix/", "plugin-data");
+      const url = await context.s3.getPresignedUrl("my-file.txt", 3600, "plugin-data");
+    }
 
-    const streams = await context.kafka.listKsqlStreams();
-    const tables = await context.kafka.listKsqlTables();
+    // Database Repository - tables are automatically prefixed with plugin name
+    if (context.database) {
+      const tables = context.database.getAllowedTables();
+      console.log("Allowed tables:", tables);
+
+      // Use Kysely query builder (restricted to allowed tables)
+      const db = context.database.getDb();
+      // Tables are automatically prefixed: "my-plugin_users"
+      const users = await db.selectFrom("users").selectAll().execute();
+
+      // Or execute raw SQL (tables are automatically prefixed)
+      const results = await context.database.executeQuery("SELECT * FROM users WHERE id = $1", [1]);
+
+      // Create tables (will be prefixed automatically)
+      await context.database.executeCommand(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL
+        );
+      `);
+    }
+
+    // Kafka Repository - topics are automatically prefixed with plugin name
+    if (context.kafka) {
+      const topics = context.kafka.getAllowedTopics();
+      console.log("Allowed topics:", topics);
+
+      // Topics are automatically prefixed: "my-plugin_user-events"
+      await context.kafka.sendMessage("user-events", [
+        { key: "key1", value: JSON.stringify({ message: "Hello" }) },
+      ]);
+
+      // Create a consumer
+      const consumer = await context.kafka.createConsumer("my-consumer", "my-group");
+      await context.kafka.subscribe("my-consumer", ["user-events"], async (payload) => {
+        const message = payload.message.value?.toString();
+        console.log("Received:", message);
+      });
+
+      // ksqlDB (topics in statements are automatically prefixed)
+      await context.kafka.executeKsqlStatement(`
+        CREATE STREAM IF NOT EXISTS user_events_stream (
+          user_id VARCHAR,
+          event_type VARCHAR,
+          timestamp BIGINT
+        ) WITH (
+          KAFKA_TOPIC='user-events',
+          VALUE_FORMAT='JSON'
+        );
+      `);
+
+      const streams = await context.kafka.listKsqlStreams();
+      const tables = await context.kafka.listKsqlTables();
+    }
   },
 };
 ```
+
+### Automatic Resource Prefixing
+
+All resources (tables, topics, buckets) are automatically prefixed with the plugin name:
+
+- Plugin name: `my-plugin`
+- Declared table: `users` → Actual table: `my-plugin_users`
+- Declared topic: `events` → Actual topic: `my-plugin_events`
+- Declared bucket: `data` → Actual bucket: `my-plugin_data`
+
+Plugins use unprefixed names in their code, but the system automatically adds the prefix.
+
+### Access Control
+
+If a plugin tries to access a resource not in its allowed list, it will throw an error:
+
+- `TableAccessDeniedError` - for database tables
+- `TopicAccessDeniedError` - for Kafka topics
+- `BucketAccessDeniedError` - for S3 buckets
+
+See [PLUGIN_RESOURCES.md](./PLUGIN_RESOURCES.md) for detailed documentation on resource restrictions and overrides.
 
 ## MinIO Console
 
@@ -209,7 +278,7 @@ docker compose -f compose/docker-compose.yml ps
 
 ### Kafka connection issues
 
-- Ensure Zookeeper is running first
+- Kafka runs in KRaft mode (no Zookeeper required)
 - Wait for Kafka health check to pass
 - Check Kafka logs: `docker logs kafka`
 - Verify broker address matches configuration

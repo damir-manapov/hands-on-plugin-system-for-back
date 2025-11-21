@@ -17,8 +17,11 @@ The `PluginManager` class handles:
 
 Plugins must implement:
 
-- `metadata`: Plugin name, version, description, and **dependencies**
+- `metadata`: Plugin name, version, description, **dependencies**, and **resource restrictions**
   - `dependencies`: Array of plugin names this plugin depends on (optional)
+  - `allowedTables`: Array of database table names this plugin can access (optional)
+  - `allowedTopics`: Array of Kafka topic names this plugin can access (optional)
+  - `allowedBuckets`: Array of S3 bucket names this plugin can access (optional)
 - `initialize(context)`: Optional initialization hook that receives a `PluginContext`
 - `cleanup()`: Optional cleanup hook (called on unload)
 - `execute()`: Optional execution method
@@ -34,8 +37,14 @@ The `PluginContext` provides:
   - `once(event, listener)`: Subscribe to an event once
 - `getDependency(name)`: Get a declared dependency plugin by name (throws if not declared)
 - `getDependencies()`: Get a Map of all declared dependency plugins
+- `s3`: S3 repository (restricted to allowed buckets) - see [Resource Restrictions](#resource-restrictions)
+- `database`: Database repository (restricted to allowed tables) - see [Resource Restrictions](#resource-restrictions)
+- `kafka`: Kafka repository (restricted to allowed topics) - see [Resource Restrictions](#resource-restrictions)
 
-**Important**: Plugins can only access plugins they declare as dependencies in their metadata. Attempting to access an undeclared plugin will throw an error.
+**Important**:
+
+- Plugins can only access plugins they declare as dependencies in their metadata. Attempting to access an undeclared plugin will throw an error.
+- Plugins can only access resources (tables, topics, buckets) they declare in their metadata. See [Resource Restrictions](#resource-restrictions) below.
 
 ## Usage
 
@@ -215,9 +224,88 @@ export default {
 };
 ```
 
+## Resource Restrictions
+
+Plugins must explicitly declare which resources they can access. Only declared resources are allowed - there are no defaults.
+
+### Declaring Resources
+
+```javascript
+export default {
+  metadata: {
+    name: "my-plugin",
+    version: "1.0.0",
+    // Declare allowed resources
+    allowedTables: ["users", "orders"], // Database tables
+    allowedTopics: ["user-events"], // Kafka topics
+    allowedBuckets: ["plugin-data"], // S3 buckets
+  },
+  async initialize(context) {
+    // Access repositories (restricted to declared resources)
+    if (context.database) {
+      // Only "users" and "orders" tables are accessible
+      const users = await context.database.executeQuery("SELECT * FROM users");
+    }
+
+    if (context.kafka) {
+      // Only "user-events" topic is accessible
+      await context.kafka.sendMessage("user-events", [{ value: "data" }]);
+    }
+
+    if (context.s3) {
+      // Only "plugin-data" bucket is accessible (bucket parameter is required)
+      await context.s3.upload("file.txt", "content", "text/plain", "plugin-data");
+    }
+  },
+};
+```
+
+### Automatic Prefixing
+
+All resources are automatically prefixed with the plugin name:
+
+- Plugin: `my-plugin`
+- Table `users` → Actual: `my-plugin_users`
+- Topic `events` → Actual: `my-plugin_events`
+- Bucket `data` → Actual: `my-plugin_data`
+
+Plugins use unprefixed names in their code; the system handles prefixing automatically.
+
+### Access Control Errors
+
+Attempting to access undeclared resources throws errors:
+
+- `TableAccessDeniedError` - for database tables
+- `TopicAccessDeniedError` - for Kafka topics
+- `BucketAccessDeniedError` - for S3 buckets
+
+### Resource Overrides
+
+You can override resource lists and map resource names at runtime:
+
+```typescript
+// Override allowed resources when loading
+await pluginManager.loadPlugin("/path/to/plugin.js", {
+  allowedTables: ["custom_users", "custom_orders"],
+  tableNameMap: {
+    users: "custom_users_table", // Map "users" → "custom_users_table"
+  },
+});
+
+// Or set overrides after loading
+pluginManager.setPluginResourceOverrides("my-plugin", {
+  allowedTopics: ["new-topic"],
+  topicNameMap: {
+    "user-events": "shared-events", // Map "user-events" → "shared-events"
+  },
+});
+```
+
+See [PLUGIN_RESOURCES.md](./PLUGIN_RESOURCES.md) for comprehensive documentation on resource restrictions and overrides.
+
 ## Example
 
-See `plugins/example-plugin-1.js` and `plugins/example-plugin-2.js` for reference implementations.
+See `plugins/example-plugin-1.js`, `plugins/example-plugin-2.js`, and `plugins/example-plugin-repository.js` for reference implementations.
 
 ## Automatic Cleanup
 
@@ -246,6 +334,9 @@ The plugin engine **automatically handles cleanup** when plugins are unloaded:
 ✅ **Dependency injection**: Only declared dependencies are accessible to plugins  
 ✅ **Event-driven communication**: Plugins can emit and subscribe to arbitrary events  
 ✅ **Inter-plugin communication**: Plugins can communicate with each other through events  
+✅ **Resource restrictions**: Plugins can only access explicitly declared resources (tables, topics, buckets)  
+✅ **Automatic prefixing**: Resources are automatically prefixed with plugin name for isolation  
+✅ **Resource overrides**: Runtime override of resource lists and name mappings  
 ✅ **Type-safe**: Full TypeScript support  
 ✅ **Programmatic control**: Full control over when plugins are loaded/unloaded
 
