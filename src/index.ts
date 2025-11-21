@@ -1,6 +1,6 @@
-export { PluginManager } from "./core/plugin-manager.js";
+export { PluginManagerService } from "./plugin-system/plugin-manager.service.js";
 export type { Plugin, PluginMetadata, PluginContext, PluginEventBus } from "./types/plugin.js";
-export type { PluginManagerEvents } from "./core/plugin-manager.js";
+export type { PluginManagerEvents } from "./plugin-system/plugin-manager.service.js";
 export {
   PluginError,
   PluginNotFoundError,
@@ -13,3 +13,4 @@ export {
   PluginUnloadError,
   DependencyResolutionError,
 } from "./errors/plugin-errors.js";
+export { PluginSystemModule } from "./plugin-system/plugin-system.module.js";

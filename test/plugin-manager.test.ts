@@ -1,21 +1,35 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { PluginManager } from "../src/core/plugin-manager.js";
+import { Test } from "@nestjs/testing";
+import { EventEmitter } from "node:events";
+import { PluginManagerService } from "../src/plugin-system/plugin-manager.service.js";
+import { PluginSystemModule } from "../src/plugin-system/plugin-system.module.js";
+import type { Plugin, PluginMetadata } from "../src/types/plugin.js";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = fileURLToPath(import.meta.url as string);
 const __dirname = dirname(__filename);
 
-describe("PluginManager", () => {
-  let pluginManager: PluginManager;
+describe("PluginManagerService", () => {
+  let pluginManager: PluginManagerService;
+  let moduleRef: Awaited<ReturnType<ReturnType<typeof Test.createTestingModule>["compile"]>>;
 
-  beforeEach(() => {
-    pluginManager = new PluginManager();
+  beforeEach(async () => {
+    const moduleBuilder = Test.createTestingModule({
+      imports: [PluginSystemModule],
+    });
+    const module = await moduleBuilder.compile();
+
+    moduleRef = module;
+    pluginManager = module.get<PluginManagerService>(PluginManagerService);
   });
 
   afterEach(async () => {
     await pluginManager.unloadAll();
+    if (moduleRef) {
+      await moduleRef.close();
+    }
   });
 
   it("should load a plugin", async () => {
@@ -51,31 +65,33 @@ describe("PluginManager", () => {
 
   it("should emit events when loading plugins", async () => {
     const pluginPath = join(__dirname, "../plugins/example-plugin-1.js");
-    let loadedPlugin = null;
+    let loadedPlugin: Plugin | null = null;
 
-    pluginManager.on("pluginLoaded", (plugin) => {
+    (pluginManager as EventEmitter).on("pluginLoaded", (plugin: Plugin) => {
       loadedPlugin = plugin;
     });
 
     await pluginManager.loadPlugin(pluginPath);
 
     expect(loadedPlugin).toBeDefined();
-    expect(loadedPlugin?.metadata.name).toBe("example-plugin-1");
+    expect(loadedPlugin).not.toBeNull();
+    expect(loadedPlugin!.metadata.name).toBe("example-plugin-1");
   });
 
   it("should emit events when unloading plugins", async () => {
     const pluginPath = join(__dirname, "../plugins/example-plugin-1.js");
     await pluginManager.loadPlugin(pluginPath);
 
-    let unloadedMetadata = null;
+    let unloadedMetadata: PluginMetadata | null = null;
 
-    pluginManager.on("pluginUnloaded", (metadata) => {
+    (pluginManager as EventEmitter).on("pluginUnloaded", (metadata: PluginMetadata) => {
       unloadedMetadata = metadata;
     });
 
     await pluginManager.unloadPlugin("example-plugin-1");
 
     expect(unloadedMetadata).toBeDefined();
-    expect(unloadedMetadata?.name).toBe("example-plugin-1");
+    expect(unloadedMetadata).not.toBeNull();
+    expect(unloadedMetadata!.name).toBe("example-plugin-1");
   });
 });

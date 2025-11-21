@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "node"],
+    "rootDir": "./",
+    "noEmit": true,
+    "moduleResolution": "node16"
   },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["test/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

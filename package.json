@@ -9,14 +9,17 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "start:dev": "tsx src/main.ts",
     "test": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.test.json"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@nestjs/testing": "^11.1.9",
     "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
@@ -27,5 +30,12 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.47.0",
     "vitest": "^4.0.12"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.9",
+    "@nestjs/core": "^11.1.9",
+    "@nestjs/platform-express": "^11.1.9",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   }
 }
