@@ -3,6 +3,10 @@ export interface PluginMetadata {
   version: string;
   description?: string;
   dependencies?: string[];
+  // Resource access restrictions
+  allowedTables?: string[]; // Database tables this plugin can access
+  allowedTopics?: string[]; // Kafka topics this plugin can access
+  allowedBuckets?: string[]; // S3 buckets this plugin can access
 }
 
 export interface PluginEventBus {
@@ -12,18 +16,18 @@ export interface PluginEventBus {
   once(event: string, listener: (data?: unknown) => void): void;
 }
 
-import type { S3Service } from "../services/s3/s3.service.js";
-import type { DatabaseService } from "../services/database/database.service.js";
-import type { KafkaService } from "../services/kafka/kafka.service.js";
+import type { S3Repository } from "../repositories/s3/s3.repository.js";
+import type { DatabaseRepository } from "../repositories/database/database.repository.js";
+import type { KafkaRepository } from "../repositories/kafka/kafka.repository.js";
 
 export interface PluginContext {
   eventBus: PluginEventBus;
   getDependency: (name: string) => Plugin | undefined;
   getDependencies: () => Map<string, Plugin>;
-  // System services (required when using PluginManagerService, optional for standalone PluginManager)
-  s3?: S3Service;
-  database?: DatabaseService;
-  kafka?: KafkaService;
+  // Restricted repositories (required when using PluginManagerService, optional for standalone PluginManager)
+  s3?: S3Repository;
+  database?: DatabaseRepository;
+  kafka?: KafkaRepository;
 }
 
 export interface Plugin {

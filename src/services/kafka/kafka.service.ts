@@ -159,6 +159,18 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Disconnect a specific consumer
+   */
+  async disconnectConsumer(consumerId: string): Promise<void> {
+    const consumer = this.consumers.get(consumerId);
+    if (consumer) {
+      await consumer.disconnect();
+      this.consumers.delete(consumerId);
+      this.logger.debug(`Consumer disconnected: ${consumerId}`);
+    }
+  }
+
+  /**
    * Get the Kafka client instance
    */
   getKafka(): Kafka {

@@ -18,6 +18,9 @@ import {
 import { S3Service } from "../services/s3/s3.service.js";
 import { DatabaseService } from "../services/database/database.service.js";
 import { KafkaService } from "../services/kafka/kafka.service.js";
+import { DatabaseRepositoryImpl } from "../repositories/database/database.repository.impl.js";
+import { KafkaRepositoryImpl } from "../repositories/kafka/kafka.repository.impl.js";
+import { S3RepositoryImpl } from "../repositories/s3/s3.repository.impl.js";
 
 export interface PluginManagerEvents {
   pluginLoaded: (plugin: Plugin) => void;
@@ -93,11 +96,26 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
     }
   }
 
-  private createPluginContext(pluginName: string, dependencies: string[]): PluginContext {
-    // System services are optional - plugins should check for availability before use
-    const s3Service = this.s3Service;
-    const databaseService = this.databaseService;
-    const kafkaService = this.kafkaService;
+  private createPluginContext(
+    pluginName: string,
+    dependencies: string[],
+    metadata: PluginMetadata
+  ): PluginContext {
+    // Create restricted repositories based on plugin metadata
+    // Resources will be automatically prefixed with plugin name
+    const allowedTables = metadata.allowedTables || [];
+    const allowedTopics = metadata.allowedTopics || [];
+    const allowedBuckets = metadata.allowedBuckets || [];
+
+    const s3Repository = this.s3Service
+      ? new S3RepositoryImpl(this.s3Service, allowedBuckets, pluginName)
+      : undefined;
+    const databaseRepository = this.databaseService
+      ? new DatabaseRepositoryImpl(this.databaseService, allowedTables, pluginName)
+      : undefined;
+    const kafkaRepository = this.kafkaService
+      ? new KafkaRepositoryImpl(this.kafkaService, allowedTopics, pluginName)
+      : undefined;
 
     const dependencyPlugins = new Map<string, Plugin>();
     for (const depName of dependencies) {
@@ -175,10 +193,10 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
         checkValid();
         return dependencyPlugins;
       },
-      // System services (guaranteed to be defined due to check above)
-      s3: s3Service,
-      database: databaseService,
-      kafka: kafkaService,
+      // Restricted repositories
+      s3: s3Repository,
+      database: databaseRepository,
+      kafka: kafkaRepository,
     };
 
     this.pluginContexts.set(pluginName, context);
@@ -207,7 +225,7 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
 
       this.pluginDependencies.set(name, new Set(dependencies));
 
-      const context = this.createPluginContext(name, dependencies);
+      const context = this.createPluginContext(name, dependencies, plugin.metadata);
 
       if (plugin.initialize) {
         await plugin.initialize(context);
