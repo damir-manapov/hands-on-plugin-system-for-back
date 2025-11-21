@@ -11,29 +11,34 @@ export class KafkaRepositoryImpl implements KafkaRepository {
   private readonly logger = new Logger(KafkaRepositoryImpl.name);
   private readonly allowedTopics: Set<string>;
   private readonly pluginSlug: string;
+  private readonly nameMap: Map<string, string>;
 
   constructor(
     private readonly kafkaService: KafkaService,
     allowedTopics: string[],
-    pluginSlug: string
+    pluginSlug: string,
+    nameMap?: Map<string, string>
   ) {
     this.pluginSlug = pluginSlug;
-    // Store prefixed topic names
-    this.allowedTopics = new Set(allowedTopics.map((t) => `${pluginSlug}_${t}`));
+    // Topics are already prefixed by plugin manager, store them as-is
+    this.allowedTopics = new Set(allowedTopics);
+    this.nameMap = nameMap || new Map();
     this.logger.debug(
       `Created Kafka repository for plugin '${pluginSlug}' with allowed topics: ${allowedTopics.join(", ")}`
     );
   }
 
   /**
-   * Prefix a topic name with the plugin slug
+   * Apply name mapping if exists, then prefix with plugin slug
    */
   private prefixTopicName(topic: string): string {
+    // Apply name mapping if exists
+    const mappedTopic = this.nameMap.get(topic) || topic;
     // If already prefixed, return as is
-    if (topic.startsWith(`${this.pluginSlug}_`)) {
-      return topic;
+    if (mappedTopic.startsWith(`${this.pluginSlug}_`)) {
+      return mappedTopic;
     }
-    return `${this.pluginSlug}_${topic}`;
+    return `${this.pluginSlug}_${mappedTopic}`;
   }
 
   /**
@@ -42,7 +47,11 @@ export class KafkaRepositoryImpl implements KafkaRepository {
   private validateTopicAccess(topic: string): void {
     const prefixedTopic = this.prefixTopicName(topic);
     if (!this.allowedTopics.has(prefixedTopic)) {
-      throw new TopicAccessDeniedError(topic, Array.from(this.allowedTopics));
+      // Get unprefixed allowed topics for error message
+      const unprefixedAllowed = Array.from(this.allowedTopics).map((t) =>
+        t.replace(`${this.pluginSlug}_`, "")
+      );
+      throw new TopicAccessDeniedError(topic, unprefixedAllowed);
     }
   }
 

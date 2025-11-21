@@ -19,6 +19,7 @@ export default {
       console.log("Allowed S3 buckets:", context.s3.getAllowedBuckets());
       // This will work - bucket is allowed
       // S3 service accepts both Buffer and string
+      // Bucket parameter is now required (no defaults)
       await context.s3.upload("test.txt", "Hello", "text/plain", "plugin-data");
       // This will throw BucketAccessDeniedError - bucket not allowed
       // await context.s3.upload("test.txt", "Hello", "text/plain", "other-bucket");

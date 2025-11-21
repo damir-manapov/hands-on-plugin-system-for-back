@@ -9,54 +9,59 @@ import { BucketAccessDeniedError } from "./s3.errors.js";
 export class S3RepositoryImpl implements S3Repository {
   private readonly logger = new Logger(S3RepositoryImpl.name);
   private readonly allowedBuckets: Set<string>;
-  private readonly defaultBucket: string;
   private readonly pluginSlug: string;
+  private readonly nameMap: Map<string, string>;
 
   constructor(
     private readonly s3Service: S3Service,
     allowedBuckets: string[],
     pluginSlug: string,
-    defaultBucket?: string
+    nameMap?: Map<string, string>
   ) {
     this.pluginSlug = pluginSlug;
-    // Prefix all bucket names with plugin slug
-    const prefixedBuckets = allowedBuckets.map((b) => `${pluginSlug}_${b}`);
-    this.allowedBuckets = new Set(prefixedBuckets);
-    this.defaultBucket = defaultBucket
-      ? `${pluginSlug}_${defaultBucket}`
-      : `${pluginSlug}_${s3Service.getDefaultBucket()}`;
+    // Buckets are already prefixed by plugin manager, store them as-is
+    this.allowedBuckets = new Set(allowedBuckets);
+    this.nameMap = nameMap || new Map();
 
-    // Ensure default bucket is in allowed buckets
-    if (!this.allowedBuckets.has(this.defaultBucket)) {
-      this.allowedBuckets.add(this.defaultBucket);
+    if (allowedBuckets.length === 0) {
+      this.logger.warn(`Plugin '${pluginSlug}' has no allowed buckets. S3 operations will fail.`);
     }
 
     this.logger.debug(
-      `Created S3 repository for plugin '${pluginSlug}' with allowed buckets: ${allowedBuckets.join(", ")}`
+      `Created S3 repository for plugin '${pluginSlug}' with allowed buckets: ${Array.from(this.allowedBuckets).join(", ")}`
     );
   }
 
   /**
-   * Prefix a bucket name with the plugin slug
+   * Apply name mapping if exists, then prefix with plugin slug
    */
   private prefixBucketName(bucket: string): string {
+    // Apply name mapping if exists
+    const mappedBucket = this.nameMap.get(bucket) || bucket;
     // If already prefixed, return as is
-    if (bucket.startsWith(`${this.pluginSlug}_`)) {
-      return bucket;
+    if (mappedBucket.startsWith(`${this.pluginSlug}_`)) {
+      return mappedBucket;
     }
-    return `${this.pluginSlug}_${bucket}`;
+    return `${this.pluginSlug}_${mappedBucket}`;
   }
 
   /**
    * Validate that a bucket is in the allowed list (after prefixing)
    */
-  private validateBucketAccess(bucket?: string): string {
-    const bucketName = bucket ? this.prefixBucketName(bucket) : this.defaultBucket;
-    if (!this.allowedBuckets.has(bucketName)) {
-      throw new BucketAccessDeniedError(
-        bucket || this.defaultBucket,
-        Array.from(this.allowedBuckets)
+  private validateBucketAccess(bucket: string): string {
+    if (!bucket) {
+      const unprefixedAllowed = Array.from(this.allowedBuckets).map((b) =>
+        b.replace(`${this.pluginSlug}_`, "")
       );
+      throw new BucketAccessDeniedError("", unprefixedAllowed);
+    }
+    const bucketName = this.prefixBucketName(bucket);
+    if (!this.allowedBuckets.has(bucketName)) {
+      // Get unprefixed allowed buckets for error message
+      const unprefixedAllowed = Array.from(this.allowedBuckets).map((b) =>
+        b.replace(`${this.pluginSlug}_`, "")
+      );
+      throw new BucketAccessDeniedError(bucket, unprefixedAllowed);
     }
     return bucketName;
   }
@@ -64,34 +69,34 @@ export class S3RepositoryImpl implements S3Repository {
   async upload(
     key: string,
     body: Buffer | string,
-    contentType?: string,
-    bucket?: string
+    contentType: string | undefined,
+    bucket: string
   ): Promise<void> {
     const bucketName = this.validateBucketAccess(bucket);
     return this.s3Service.upload(key, body, contentType, bucketName);
   }
 
-  async download(key: string, bucket?: string): Promise<Buffer> {
+  async download(key: string, bucket: string): Promise<Buffer> {
     const bucketName = this.validateBucketAccess(bucket);
     return this.s3Service.download(key, bucketName);
   }
 
-  async delete(key: string, bucket?: string): Promise<void> {
+  async delete(key: string, bucket: string): Promise<void> {
     const bucketName = this.validateBucketAccess(bucket);
     return this.s3Service.delete(key, bucketName);
   }
 
-  async list(prefix?: string, bucket?: string): Promise<string[]> {
+  async list(prefix: string | undefined, bucket: string): Promise<string[]> {
     const bucketName = this.validateBucketAccess(bucket);
     return this.s3Service.list(prefix, bucketName);
   }
 
-  async exists(key: string, bucket?: string): Promise<boolean> {
+  async exists(key: string, bucket: string): Promise<boolean> {
     const bucketName = this.validateBucketAccess(bucket);
     return this.s3Service.exists(key, bucketName);
   }
 
-  async getPresignedUrl(key: string, expiresIn: number, bucket?: string): Promise<string> {
+  async getPresignedUrl(key: string, expiresIn: number, bucket: string): Promise<string> {
     const bucketName = this.validateBucketAccess(bucket);
     return this.s3Service.getPresignedUrl(key, expiresIn, bucketName);
   }

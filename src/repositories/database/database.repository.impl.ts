@@ -12,30 +12,36 @@ export class DatabaseRepositoryImpl implements DatabaseRepository {
   private readonly logger = new Logger(DatabaseRepositoryImpl.name);
   private readonly allowedTables: Set<string>;
   private readonly pluginSlug: string;
+  private readonly nameMap: Map<string, string>;
 
   constructor(
     private readonly databaseService: DatabaseService,
     allowedTables: string[],
-    pluginSlug: string
+    pluginSlug: string,
+    nameMap?: Map<string, string>
   ) {
     this.pluginSlug = pluginSlug;
-    // Store both prefixed and unprefixed table names for validation
-    this.allowedTables = new Set(allowedTables.map((t) => `${pluginSlug}_${t.toLowerCase()}`));
+    // Tables are already prefixed by plugin manager, store them as-is
+    this.allowedTables = new Set(allowedTables.map((t) => t.toLowerCase()));
+    this.nameMap = nameMap || new Map();
     this.logger.debug(
       `Created database repository for plugin '${pluginSlug}' with allowed tables: ${allowedTables.join(", ")}`
     );
   }
 
   /**
-   * Prefix a table name with the plugin slug
+   * Apply name mapping if exists, then prefix with plugin slug
    */
   private prefixTableName(tableName: string): string {
     const lowerTable = tableName.toLowerCase();
+    // Apply name mapping if exists
+    const mappedName = this.nameMap.get(lowerTable) || lowerTable;
+    const mappedLower = mappedName.toLowerCase();
     // If already prefixed, return as is
-    if (lowerTable.startsWith(`${this.pluginSlug}_`)) {
-      return lowerTable;
+    if (mappedLower.startsWith(`${this.pluginSlug}_`)) {
+      return mappedLower;
     }
-    return `${this.pluginSlug}_${lowerTable}`;
+    return `${this.pluginSlug}_${mappedLower}`;
   }
 
   /**
@@ -100,18 +106,16 @@ export class DatabaseRepositoryImpl implements DatabaseRepository {
       }
     }
 
-    // Check if all referenced tables are allowed (compare unprefixed names)
-    // Remove plugin prefix from allowed tables for comparison
-    const unprefixedAllowed = Array.from(this.allowedTables).map((t) =>
-      t.replace(`${this.pluginSlug}_`, "")
-    );
+    // Check if all referenced tables are allowed
+    // Tables in SQL are unprefixed, so we need to prefix them for comparison
     for (const table of referencedTables) {
-      // Check if table is already prefixed (shouldn't happen, but handle it)
-      const unprefixedTable = table.startsWith(`${this.pluginSlug}_`)
-        ? table.replace(`${this.pluginSlug}_`, "")
-        : table;
-      if (!unprefixedAllowed.includes(unprefixedTable)) {
-        throw new TableAccessDeniedError(unprefixedTable, unprefixedAllowed);
+      const prefixedTable = this.prefixTableName(table);
+      if (!this.allowedTables.has(prefixedTable)) {
+        // Get unprefixed allowed tables for error message
+        const unprefixedAllowed = Array.from(this.allowedTables).map((t) =>
+          t.replace(`${this.pluginSlug}_`, "")
+        );
+        throw new TableAccessDeniedError(table, unprefixedAllowed);
       }
     }
   }

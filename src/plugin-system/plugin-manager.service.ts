@@ -22,6 +22,17 @@ import { DatabaseRepositoryImpl } from "../repositories/database/database.reposi
 import { KafkaRepositoryImpl } from "../repositories/kafka/kafka.repository.impl.js";
 import { S3RepositoryImpl } from "../repositories/s3/s3.repository.impl.js";
 
+export interface PluginResourceOverrides {
+  allowedTables?: string[];
+  allowedTopics?: string[];
+  allowedBuckets?: string[];
+  // Map plugin resource names to actual resource names
+  // e.g., { "users": "custom_users_table" } means when plugin uses "users", it accesses "custom_users_table"
+  tableNameMap?: Record<string, string>;
+  topicNameMap?: Record<string, string>;
+  bucketNameMap?: Record<string, string>;
+}
+
 export interface PluginManagerEvents {
   pluginLoaded: (plugin: Plugin) => void;
   pluginUnloaded: (metadata: PluginMetadata) => void;
@@ -47,6 +58,16 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
   private pluginContexts: Map<string, PluginContext> = new Map();
   private invalidatedPlugins: Set<string> = new Set();
   private pluginsDirectory?: string;
+  private pluginResourceOverrides: Map<string, PluginResourceOverrides> = new Map();
+  // Store name mappings for each plugin (plugin name -> resource type -> original name -> mapped name)
+  private pluginResourceNameMaps: Map<
+    string,
+    {
+      tables: Map<string, string>;
+      topics: Map<string, string>;
+      buckets: Map<string, string>;
+    }
+  > = new Map();
 
   constructor(
     @Optional() private readonly s3Service?: S3Service,
@@ -96,25 +117,93 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
     }
   }
 
+  /**
+   * Prefix resource names with plugin slug
+   */
+  private prefixResources(resources: string[], pluginSlug: string): string[] {
+    return resources.map((resource) => `${pluginSlug}_${resource}`);
+  }
+
+  /**
+   * Apply name mappings to resources
+   * If a mapping exists, use the mapped name; otherwise use the original name
+   */
+  private applyNameMappings(
+    resources: string[],
+    nameMap: Record<string, string> | undefined
+  ): string[] {
+    if (!nameMap) {
+      return resources;
+    }
+    return resources.map((resource) => nameMap[resource] || resource);
+  }
+
   private createPluginContext(
     pluginName: string,
     dependencies: string[],
-    metadata: PluginMetadata
+    metadata: PluginMetadata,
+    resourceOverrides?: PluginResourceOverrides
   ): PluginContext {
-    // Create restricted repositories based on plugin metadata
-    // Resources will be automatically prefixed with plugin name
-    const allowedTables = metadata.allowedTables || [];
-    const allowedTopics = metadata.allowedTopics || [];
-    const allowedBuckets = metadata.allowedBuckets || [];
+    // Use resource overrides if provided, otherwise use plugin metadata
+    const overrides = resourceOverrides || this.pluginResourceOverrides.get(pluginName);
+    const rawTables =
+      overrides?.allowedTables !== undefined
+        ? overrides.allowedTables
+        : metadata.allowedTables || [];
+    const rawTopics =
+      overrides?.allowedTopics !== undefined
+        ? overrides.allowedTopics
+        : metadata.allowedTopics || [];
+    const rawBuckets =
+      overrides?.allowedBuckets !== undefined
+        ? overrides.allowedBuckets
+        : metadata.allowedBuckets || [];
+
+    // Apply name mappings if provided
+    const mappedTables = this.applyNameMappings(rawTables, overrides?.tableNameMap);
+    const mappedTopics = this.applyNameMappings(rawTopics, overrides?.topicNameMap);
+    const mappedBuckets = this.applyNameMappings(rawBuckets, overrides?.bucketNameMap);
+
+    // Store name mappings for this plugin
+    const tableMap = new Map<string, string>();
+    const topicMap = new Map<string, string>();
+    const bucketMap = new Map<string, string>();
+
+    if (overrides?.tableNameMap) {
+      for (const [original, mapped] of Object.entries(overrides.tableNameMap)) {
+        tableMap.set(original.toLowerCase(), mapped);
+      }
+    }
+    if (overrides?.topicNameMap) {
+      for (const [original, mapped] of Object.entries(overrides.topicNameMap)) {
+        topicMap.set(original, mapped);
+      }
+    }
+    if (overrides?.bucketNameMap) {
+      for (const [original, mapped] of Object.entries(overrides.bucketNameMap)) {
+        bucketMap.set(original, mapped);
+      }
+    }
+
+    this.pluginResourceNameMaps.set(pluginName, {
+      tables: tableMap,
+      topics: topicMap,
+      buckets: bucketMap,
+    });
+
+    // Plugin manager prefixes resources before passing to repositories
+    const allowedTables = this.prefixResources(mappedTables, pluginName);
+    const allowedTopics = this.prefixResources(mappedTopics, pluginName);
+    const allowedBuckets = this.prefixResources(mappedBuckets, pluginName);
 
     const s3Repository = this.s3Service
-      ? new S3RepositoryImpl(this.s3Service, allowedBuckets, pluginName)
+      ? new S3RepositoryImpl(this.s3Service, allowedBuckets, pluginName, bucketMap)
       : undefined;
     const databaseRepository = this.databaseService
-      ? new DatabaseRepositoryImpl(this.databaseService, allowedTables, pluginName)
+      ? new DatabaseRepositoryImpl(this.databaseService, allowedTables, pluginName, tableMap)
       : undefined;
     const kafkaRepository = this.kafkaService
-      ? new KafkaRepositoryImpl(this.kafkaService, allowedTopics, pluginName)
+      ? new KafkaRepositoryImpl(this.kafkaService, allowedTopics, pluginName, topicMap)
       : undefined;
 
     const dependencyPlugins = new Map<string, Plugin>();
@@ -203,7 +292,10 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
     return context;
   }
 
-  async loadPlugin(pluginPath: string): Promise<Plugin> {
+  async loadPlugin(
+    pluginPath: string,
+    resourceOverrides?: PluginResourceOverrides
+  ): Promise<Plugin> {
     try {
       const moduleUrl = pathToFileURL(pluginPath).href;
       const module = await import(moduleUrl);
@@ -225,7 +317,17 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
 
       this.pluginDependencies.set(name, new Set(dependencies));
 
-      const context = this.createPluginContext(name, dependencies, plugin.metadata);
+      // Store resource overrides if provided
+      if (resourceOverrides) {
+        this.pluginResourceOverrides.set(name, resourceOverrides);
+      }
+
+      const context = this.createPluginContext(
+        name,
+        dependencies,
+        plugin.metadata,
+        resourceOverrides
+      );
 
       if (plugin.initialize) {
         await plugin.initialize(context);
@@ -287,6 +389,7 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
       this.plugins.delete(name);
       this.pluginPaths.delete(name);
       this.invalidatedPlugins.delete(name);
+      // Note: We keep resource overrides even after unload so they persist on reload
 
       this.emit("pluginUnloaded", plugin.metadata);
       this.logger.log(`Plugin unloaded: ${name}`);
@@ -312,16 +415,19 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
     return Array.from(this.plugins.keys());
   }
 
-  async reloadPlugin(name: string): Promise<Plugin> {
+  async reloadPlugin(name: string, resourceOverrides?: PluginResourceOverrides): Promise<Plugin> {
     const pluginPath = this.pluginPaths.get(name);
 
     if (!pluginPath) {
       throw new PluginNotFoundError(name);
     }
 
+    // Preserve existing overrides if new ones not provided
+    const overrides = resourceOverrides || this.pluginResourceOverrides.get(name);
+
     await this.unloadPlugin(name);
 
-    return this.loadPlugin(pluginPath);
+    return this.loadPlugin(pluginPath, overrides);
   }
 
   async loadPluginsFromDirectory(directory: string): Promise<void> {
@@ -365,7 +471,9 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
 
           if (allDependenciesLoaded) {
             try {
-              await this.loadPlugin(path);
+              // Use any stored overrides for this plugin
+              const overrides = this.pluginResourceOverrides.get(name);
+              await this.loadPlugin(path, overrides);
               loadedPlugins.add(name);
               remainingPlugins.delete(name);
               loadedAny = true;
@@ -394,6 +502,42 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
 
   getPluginPath(name: string): string | undefined {
     return this.pluginPaths.get(name);
+  }
+
+  /**
+   * Set resource overrides for a plugin (tables, topics, buckets)
+   * These overrides will be used when loading/reloading the plugin
+   */
+  setPluginResourceOverrides(name: string, overrides: PluginResourceOverrides): void {
+    this.pluginResourceOverrides.set(name, overrides);
+    // If plugin is already loaded, reload it with new overrides
+    if (this.plugins.has(name)) {
+      this.logger.debug(`Resource overrides updated for plugin '${name}', reloading...`);
+      this.reloadPlugin(name, overrides).catch((error) => {
+        this.logger.error(`Failed to reload plugin '${name}' with new overrides: ${error}`);
+      });
+    }
+  }
+
+  /**
+   * Get resource overrides for a plugin
+   */
+  getPluginResourceOverrides(name: string): PluginResourceOverrides | undefined {
+    return this.pluginResourceOverrides.get(name);
+  }
+
+  /**
+   * Clear resource overrides for a plugin
+   */
+  clearPluginResourceOverrides(name: string): void {
+    this.pluginResourceOverrides.delete(name);
+    // If plugin is already loaded, reload it without overrides (use metadata defaults)
+    if (this.plugins.has(name)) {
+      this.logger.debug(`Resource overrides cleared for plugin '${name}', reloading...`);
+      this.reloadPlugin(name).catch((error) => {
+        this.logger.error(`Failed to reload plugin '${name}' after clearing overrides: ${error}`);
+      });
+    }
   }
 
   findPluginByPath(path: string): string | undefined {
