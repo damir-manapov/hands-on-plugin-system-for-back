@@ -1,7 +1,6 @@
 ---
 alwaysApply: false
 ---
-
 # Check Script Rules
 
 Run `./all-checks.sh` after changes, make sure they passes

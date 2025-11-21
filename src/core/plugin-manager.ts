@@ -151,6 +151,8 @@ export class PluginManager extends EventEmitter {
         checkValid();
         return dependencyPlugins;
       },
+      // System services are not available in standalone PluginManager
+      // Use PluginManagerService for access to S3, Database, and Kafka services
     };
 
     this.pluginContexts.set(pluginName, context);

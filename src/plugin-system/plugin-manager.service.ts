@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from "@nestjs/common";
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger, Optional } from "@nestjs/common";
 import { EventEmitter } from "node:events";
 import type { Plugin, PluginMetadata, PluginContext, PluginEventBus } from "../types/plugin.js";
 import { readdir, stat } from "node:fs/promises";
@@ -15,6 +15,9 @@ import {
   DependencyResolutionError,
   PluginNotFoundError,
 } from "../errors/plugin-errors.js";
+import { S3Service } from "../services/s3/s3.service.js";
+import { DatabaseService } from "../services/database/database.service.js";
+import { KafkaService } from "../services/kafka/kafka.service.js";
 
 export interface PluginManagerEvents {
   pluginLoaded: (plugin: Plugin) => void;
@@ -41,6 +44,14 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
   private pluginContexts: Map<string, PluginContext> = new Map();
   private invalidatedPlugins: Set<string> = new Set();
   private pluginsDirectory?: string;
+
+  constructor(
+    @Optional() private readonly s3Service?: S3Service,
+    @Optional() private readonly databaseService?: DatabaseService,
+    @Optional() private readonly kafkaService?: KafkaService
+  ) {
+    super();
+  }
 
   setPluginsDirectory(directory: string): void {
     this.pluginsDirectory = directory;
@@ -83,6 +94,11 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
   }
 
   private createPluginContext(pluginName: string, dependencies: string[]): PluginContext {
+    // System services are optional - plugins should check for availability before use
+    const s3Service = this.s3Service;
+    const databaseService = this.databaseService;
+    const kafkaService = this.kafkaService;
+
     const dependencyPlugins = new Map<string, Plugin>();
     for (const depName of dependencies) {
       const plugin = this.plugins.get(depName);
@@ -159,6 +175,10 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
         checkValid();
         return dependencyPlugins;
       },
+      // System services (guaranteed to be defined due to check above)
+      s3: s3Service,
+      database: databaseService,
+      kafka: kafkaService,
     };
 
     this.pluginContexts.set(pluginName, context);

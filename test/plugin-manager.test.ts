@@ -3,6 +3,9 @@ import { Test } from "@nestjs/testing";
 import { EventEmitter } from "node:events";
 import { PluginManagerService } from "../src/plugin-system/plugin-manager.service.js";
 import { PluginSystemModule } from "../src/plugin-system/plugin-system.module.js";
+import { S3Module } from "../src/services/s3/s3.module.js";
+import { DatabaseModule } from "../src/services/database/database.module.js";
+import { KafkaModule } from "../src/services/kafka/kafka.module.js";
 import type { Plugin, PluginMetadata } from "../src/types/plugin.js";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +20,7 @@ describe("PluginManagerService", () => {
 
   beforeEach(async () => {
     const moduleBuilder = Test.createTestingModule({
-      imports: [PluginSystemModule],
+      imports: [S3Module, DatabaseModule, KafkaModule, PluginSystemModule],
     });
     const module = await moduleBuilder.compile();
 

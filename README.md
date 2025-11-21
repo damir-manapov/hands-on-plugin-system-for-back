@@ -21,6 +21,34 @@ Researching plugin system on backend built with NestJS. Plugins are **not** Nest
 pnpm install
 ```
 
+## Docker Compose Services
+
+Start infrastructure services (S3, PostgreSQL, Kafka, ksqlDB):
+
+```bash
+pnpm run compose:up
+```
+
+Stop services:
+
+```bash
+pnpm run compose:down
+```
+
+Restart services:
+
+```bash
+pnpm run compose:restart
+```
+
+Reset services (⚠️ removes all data):
+
+```bash
+pnpm run compose:reset
+```
+
+See [SETUP.md](./SETUP.md) for detailed setup instructions.
+
 ## Development
 
 ```bash
