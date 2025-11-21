@@ -1,18 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Test } from "@nestjs/testing";
 import { EventEmitter } from "node:events";
-import { PluginManagerService } from "../src/plugin-system/plugin-manager.service.js";
-import { PluginSystemModule } from "../src/plugin-system/plugin-system.module.js";
-import { S3Module } from "../src/services/s3/s3.module.js";
-import { DatabaseModule } from "../src/services/database/database.module.js";
-import { KafkaModule } from "../src/services/kafka/kafka.module.js";
-import type { Plugin, PluginMetadata } from "../src/types/plugin.js";
+import { PluginManagerService } from "./plugin-manager.service.js";
+import { PluginSystemModule } from "./plugin-system.module.js";
+import { S3Module } from "../services/s3/s3.module.js";
+import { DatabaseModule } from "../services/database/database.module.js";
+import { KafkaModule } from "../services/kafka/kafka.module.js";
+import type { Plugin, PluginMetadata } from "../types/plugin.js";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
 const __filename = fileURLToPath(import.meta.url as string);
 const __dirname = dirname(__filename);
+// Test file is in src/plugin-system/, plugins are in project root
+const pluginsDir = join(__dirname, "../../plugins");
 
 describe("PluginManagerService", () => {
   let pluginManager: PluginManagerService;
@@ -36,7 +38,7 @@ describe("PluginManagerService", () => {
   });
 
   it("should load a plugin", async () => {
-    const pluginPath = join(__dirname, "../plugins/example-plugin-1.js");
+    const pluginPath = join(pluginsDir, "example-plugin-1.js");
     const plugin = await pluginManager.loadPlugin(pluginPath);
 
     expect(plugin).toBeDefined();
@@ -45,7 +47,7 @@ describe("PluginManagerService", () => {
   });
 
   it("should unload a plugin", async () => {
-    const pluginPath = join(__dirname, "../plugins/example-plugin-1.js");
+    const pluginPath = join(pluginsDir, "example-plugin-1.js");
     await pluginManager.loadPlugin(pluginPath);
 
     await pluginManager.unloadPlugin("example-plugin-1");
@@ -54,8 +56,8 @@ describe("PluginManagerService", () => {
   });
 
   it("should get all plugins", async () => {
-    const plugin1Path = join(__dirname, "../plugins/example-plugin-1.js");
-    const plugin2Path = join(__dirname, "../plugins/example-plugin-2.js");
+    const plugin1Path = join(pluginsDir, "example-plugin-1.js");
+    const plugin2Path = join(pluginsDir, "example-plugin-2.js");
 
     await pluginManager.loadPlugin(plugin1Path);
     await pluginManager.loadPlugin(plugin2Path);
@@ -67,7 +69,7 @@ describe("PluginManagerService", () => {
   });
 
   it("should emit events when loading plugins", async () => {
-    const pluginPath = join(__dirname, "../plugins/example-plugin-1.js");
+    const pluginPath = join(pluginsDir, "example-plugin-1.js");
     let loadedPlugin: Plugin | null = null;
 
     (pluginManager as EventEmitter).on("pluginLoaded", (plugin: Plugin) => {
@@ -82,7 +84,7 @@ describe("PluginManagerService", () => {
   });
 
   it("should emit events when unloading plugins", async () => {
-    const pluginPath = join(__dirname, "../plugins/example-plugin-1.js");
+    const pluginPath = join(pluginsDir, "example-plugin-1.js");
     await pluginManager.loadPlugin(pluginPath);
 
     let unloadedMetadata: PluginMetadata | null = null;

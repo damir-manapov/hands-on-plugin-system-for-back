@@ -6,6 +6,6 @@
     "noEmit": true,
     "moduleResolution": "node16"
   },
-  "include": ["test/**/*"],
+  "include": ["src/**/*.test.ts", "test/**/*"],
   "exclude": ["node_modules", "dist"]
 }
