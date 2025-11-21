@@ -2,18 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DatabaseRepositoryImpl } from "./database.repository.impl.js";
 import { DatabaseService } from "../../services/database/database.service.js";
 import { TableAccessDeniedError } from "./database.errors.js";
-import type { Kysely } from "kysely";
-import type { Database } from "../../services/database/database.types.js";
 
 describe("DatabaseRepositoryImpl", () => {
   let mockDatabaseService: DatabaseService;
   let repository: DatabaseRepositoryImpl;
-  let mockDb: Kysely<Database>;
 
   beforeEach(() => {
-    mockDb = {} as Kysely<Database>;
     mockDatabaseService = {
-      getDb: vi.fn().mockReturnValue(mockDb),
       executeQuery: vi.fn().mockResolvedValue([]),
       executeCommand: vi.fn().mockResolvedValue(1),
     } as unknown as DatabaseService;
@@ -44,14 +39,6 @@ describe("DatabaseRepositoryImpl", () => {
         nameMap
       );
       expect(repo.getAllowedTables()).toEqual(["custom_users"]);
-    });
-  });
-
-  describe("getDb", () => {
-    it("should return database instance", () => {
-      const db = repository.getDb();
-      expect(db).toBe(mockDb);
-      expect(mockDatabaseService.getDb).toHaveBeenCalled();
     });
   });
 

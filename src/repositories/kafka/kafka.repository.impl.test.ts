@@ -23,10 +23,6 @@ describe("KafkaRepositoryImpl", () => {
       subscribe: vi.fn().mockResolvedValue(undefined),
       disconnectConsumer: vi.fn().mockResolvedValue(undefined),
       executeKsqlStatement: vi.fn().mockResolvedValue({}),
-      executeKsqlQuery: vi.fn().mockResolvedValue({}),
-      getKsqlDBInfo: vi.fn().mockResolvedValue({}),
-      listKsqlStreams: vi.fn().mockResolvedValue({}),
-      listKsqlTables: vi.fn().mockResolvedValue({}),
     } as unknown as KafkaService;
 
     repository = new KafkaRepositoryImpl(
@@ -227,38 +223,6 @@ describe("KafkaRepositoryImpl", () => {
 
       const call = vi.mocked(mockKafkaService.executeKsqlStatement).mock.calls[0];
       expect(call[0]).toContain("plugin-slug_custom_events");
-    });
-  });
-
-  describe("executeKsqlQuery", () => {
-    it("should delegate to kafka service", async () => {
-      await repository.executeKsqlQuery("SELECT * FROM stream;");
-
-      expect(mockKafkaService.executeKsqlQuery).toHaveBeenCalledWith("SELECT * FROM stream;");
-    });
-  });
-
-  describe("getKsqlDBInfo", () => {
-    it("should delegate to kafka service", async () => {
-      await repository.getKsqlDBInfo();
-
-      expect(mockKafkaService.getKsqlDBInfo).toHaveBeenCalled();
-    });
-  });
-
-  describe("listKsqlStreams", () => {
-    it("should delegate to kafka service", async () => {
-      await repository.listKsqlStreams();
-
-      expect(mockKafkaService.listKsqlStreams).toHaveBeenCalled();
-    });
-  });
-
-  describe("listKsqlTables", () => {
-    it("should delegate to kafka service", async () => {
-      await repository.listKsqlTables();
-
-      expect(mockKafkaService.listKsqlTables).toHaveBeenCalled();
     });
   });
 });

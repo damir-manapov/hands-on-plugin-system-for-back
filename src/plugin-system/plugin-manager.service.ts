@@ -14,7 +14,15 @@ import {
   PluginUnloadError,
   DependencyResolutionError,
   PluginNotFoundError,
+  InvalidNamingConventionError,
 } from "../errors/plugin-errors.js";
+import {
+  validatePluginName,
+  validateTableName,
+  validateTopicName,
+  validateBucketName,
+  validateResourceNames,
+} from "../utils/naming-validation.js";
 import { S3Service } from "../services/s3/s3.service.js";
 import { DatabaseService } from "../services/database/database.service.js";
 import { KafkaService } from "../services/kafka/kafka.service.js";
@@ -96,6 +104,123 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
     }
 
     this.checkCircularDependencies(pluginName, dependencies, new Set([pluginName]));
+  }
+
+  private validateNamingConventions(
+    metadata: PluginMetadata,
+    resourceOverrides?: PluginResourceOverrides
+  ): void {
+    const pluginName = metadata.name;
+
+    // Validate plugin name
+    try {
+      validatePluginName(pluginName);
+    } catch (error) {
+      throw new InvalidNamingConventionError(
+        pluginName,
+        "plugin name",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
+    // Validate dependency names
+    const dependencies = metadata.dependencies || [];
+    for (const depName of dependencies) {
+      try {
+        validatePluginName(depName);
+      } catch (error) {
+        throw new InvalidNamingConventionError(
+          pluginName,
+          "dependency name",
+          `Dependency '${depName}': ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    // Validate resource names from metadata or overrides
+    const allowedTables = resourceOverrides?.allowedTables || metadata.allowedTables || [];
+    const allowedTopics = resourceOverrides?.allowedTopics || metadata.allowedTopics || [];
+    const allowedBuckets = resourceOverrides?.allowedBuckets || metadata.allowedBuckets || [];
+
+    // Validate table names
+    try {
+      validateResourceNames(allowedTables, validateTableName, "table");
+    } catch (error) {
+      throw new InvalidNamingConventionError(
+        pluginName,
+        "table",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
+    // Validate topic names
+    try {
+      validateResourceNames(allowedTopics, validateTopicName, "topic");
+    } catch (error) {
+      throw new InvalidNamingConventionError(
+        pluginName,
+        "topic",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
+    // Validate bucket names
+    try {
+      validateResourceNames(allowedBuckets, validateBucketName, "bucket");
+    } catch (error) {
+      throw new InvalidNamingConventionError(
+        pluginName,
+        "bucket",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
+    // Validate name mappings
+    const tableNameMap = resourceOverrides?.tableNameMap || {};
+    const topicNameMap = resourceOverrides?.topicNameMap || {};
+    const bucketNameMap = resourceOverrides?.bucketNameMap || {};
+
+    // Validate mapped table names (values in the map)
+    for (const [originalName, mappedName] of Object.entries(tableNameMap)) {
+      try {
+        validateTableName(originalName);
+        validateTableName(mappedName);
+      } catch (error) {
+        throw new InvalidNamingConventionError(
+          pluginName,
+          "table name mapping",
+          `Mapping '${originalName}' -> '${mappedName}': ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    // Validate mapped topic names
+    for (const [originalName, mappedName] of Object.entries(topicNameMap)) {
+      try {
+        validateTopicName(originalName);
+        validateTopicName(mappedName);
+      } catch (error) {
+        throw new InvalidNamingConventionError(
+          pluginName,
+          "topic name mapping",
+          `Mapping '${originalName}' -> '${mappedName}': ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    // Validate mapped bucket names
+    for (const [originalName, mappedName] of Object.entries(bucketNameMap)) {
+      try {
+        validateBucketName(originalName);
+        validateBucketName(mappedName);
+      } catch (error) {
+        throw new InvalidNamingConventionError(
+          pluginName,
+          "bucket name mapping",
+          `Mapping '${originalName}' -> '${mappedName}': ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
   }
 
   private checkCircularDependencies(
@@ -313,6 +438,9 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
         await this.unloadPlugin(name);
       }
 
+      // Validate naming conventions before proceeding
+      this.validateNamingConventions(plugin.metadata, resourceOverrides);
+
       this.validateDependencies(plugin);
 
       this.pluginDependencies.set(name, new Set(dependencies));
@@ -345,7 +473,8 @@ export class PluginManagerService extends EventEmitter implements OnModuleInit, 
         error instanceof DependencyNotFoundError ||
         error instanceof SelfDependencyError ||
         error instanceof CircularDependencyError ||
-        error instanceof InvalidPluginFormatError
+        error instanceof InvalidPluginFormatError ||
+        error instanceof InvalidNamingConventionError
       ) {
         this.emit("pluginError", error, undefined);
         throw error;

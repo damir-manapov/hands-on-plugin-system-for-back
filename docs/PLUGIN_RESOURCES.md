@@ -77,20 +77,19 @@ if (context.database) {
   const tables = context.database.getAllowedTables();
   console.log("Allowed tables:", tables); // ["users", "orders"]
 
-  // Use Kysely query builder (tables are automatically prefixed)
-  const db = context.database.getDb();
-  const users = await db.selectFrom("users").selectAll().execute();
-
-  // Execute raw SQL (tables are automatically prefixed)
+  // Execute raw SQL queries (tables are automatically prefixed)
   const results = await context.database.executeQuery("SELECT * FROM users WHERE id = $1", [1]);
 
-  // Create tables (will be prefixed automatically)
+  // Execute SQL commands (tables are automatically prefixed)
   await context.database.executeCommand(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL
     );
   `);
+
+  // Insert data
+  await context.database.executeCommand("INSERT INTO users (name) VALUES ($1)", ["John Doe"]);
 }
 ```
 
@@ -116,7 +115,7 @@ if (context.kafka) {
     console.log("Received:", message);
   });
 
-  // ksqlDB (topics in statements are automatically prefixed)
+  // ksqlDB statements (topics in statements are automatically prefixed)
   await context.kafka.executeKsqlStatement(`
     CREATE STREAM IF NOT EXISTS user_events_stream (
       user_id VARCHAR,
@@ -249,6 +248,85 @@ try {
 }
 ```
 
+## Limitations and Potential Issues
+
+While the access restriction system provides strong protection, there are some limitations and edge cases to be aware of:
+
+### Database Access Limitations
+
+#### SQL Parsing Limitations
+
+Table access validation uses regex-based SQL parsing, which may not catch all table references in complex queries:
+
+- **Subqueries**: Tables referenced in nested subqueries might not be fully validated
+- **CTEs (Common Table Expressions)**: `WITH` clauses might not be fully parsed
+- **Dynamic SQL**: SQL constructed dynamically at runtime might bypass validation
+- **Stored procedures/functions**: Calls to stored procedures that access tables might not be validated
+- **Views**: Accessing views that reference multiple tables might not validate all underlying tables
+
+**Example of potential bypass**:
+
+```sql
+-- This might not be fully validated if the parser doesn't handle CTEs
+WITH temp AS (SELECT * FROM unauthorized_table)
+SELECT * FROM temp;
+```
+
+**Recommendation**: Keep SQL queries simple and avoid complex nested queries. Test thoroughly to ensure all table references are validated.
+
+### Kafka Access Limitations
+
+ksqlDB statement validation validates `KAFKA_TOPIC` parameters explicitly in CREATE statements. However:
+
+- **Complex statements**: Very complex ksqlDB statements with multiple topics might not be fully validated
+- **Indirect topic access**: Streams/tables might reference topics indirectly through other streams
+
+**Recommendation**: Keep ksqlDB statements simple and ensure all `KAFKA_TOPIC` parameters reference allowed topics.
+
+### S3 Access Limitations
+
+S3 repository validation is the most robust, as all operations explicitly require a bucket parameter. However:
+
+- **Bucket name validation**: Bucket names are validated before each operation, but the validation happens at the repository level, not at the S3 service level
+- **Presigned URLs**: Presigned URLs are generated with bucket validation, but once generated, they could potentially be used to access objects even if access is later revoked (this is a limitation of presigned URLs in general)
+
+**Recommendation**: S3 access restrictions are generally reliable. Be cautious with presigned URLs and their expiration times.
+
+### General Limitations
+
+#### 1. Runtime Type Safety
+
+TypeScript types provide compile-time safety, but at runtime:
+
+- **Dynamic access**: JavaScript's dynamic nature means plugins could construct resource names dynamically
+- **Type erasure**: Type information is erased at runtime, so runtime validation relies on string matching
+
+**Recommendation**: Always validate resource names at runtime (which the repositories do), don't rely solely on TypeScript types.
+
+#### 2. Resource Name Collisions
+
+While resource prefixing prevents most collisions:
+
+- **Name mapping edge cases**: Complex name mappings might create unexpected behavior
+- **Case sensitivity**: Database systems might be case-sensitive or case-insensitive, which could affect validation
+
+**Recommendation**: Use consistent naming conventions and test name mappings thoroughly.
+
+#### 3. Performance Considerations
+
+- **SQL parsing overhead**: Regex-based SQL parsing adds overhead to each query
+- **Validation on every call**: Each repository method validates access, which adds a small performance cost
+
+**Recommendation**: The performance impact is minimal for most use cases, but be aware of it for high-throughput scenarios.
+
+### Security Recommendations
+
+1. **Defense in depth**: Don't rely solely on repository restrictions - also implement database-level permissions, Kafka ACLs, and S3 bucket policies
+2. **Audit logging**: Monitor and log all resource access attempts, including denied attempts
+3. **Regular testing**: Test access restrictions thoroughly, including edge cases and complex queries
+4. **Code review**: Review plugin code to ensure it's not attempting to bypass restrictions
+5. **Least privilege**: Only grant plugins the minimum resources they need
+
 ## Best Practices
 
 1. **Declare all resources**: Always declare all resources your plugin needs in metadata
@@ -257,6 +335,9 @@ try {
 4. **Handle errors gracefully**: Catch and handle access denied errors appropriately
 5. **Use name mappings for flexibility**: Use runtime name mappings when you need to adapt to different environments
 6. **Document resource requirements**: Document which resources your plugin needs in its description
+7. **Keep queries simple**: Avoid overly complex SQL or ksqlDB statements that might bypass validation
+8. **Test thoroughly**: Test all resource access paths, including edge cases
+9. **Monitor access**: Implement logging and monitoring for resource access attempts
 
 ## Examples
 
@@ -286,7 +367,6 @@ See `plugins/example-plugin-repository.js` for a complete example demonstrating 
 
 #### DatabaseRepository
 
-- `getDb()`: Get Kysely instance (restricted to allowed tables)
 - `executeQuery(querySql, parameters?)`: Execute SELECT query
 - `executeCommand(querySql, parameters?)`: Execute INSERT/UPDATE/DELETE
 - `getAllowedTables()`: Get list of allowed tables (unprefixed)
@@ -298,8 +378,4 @@ See `plugins/example-plugin-repository.js` for a complete example demonstrating 
 - `subscribe(consumerId, topics, eachMessage)`: Subscribe to topics
 - `disconnectConsumer(consumerId)`: Disconnect consumer
 - `executeKsqlStatement(statement)`: Execute ksqlDB statement
-- `executeKsqlQuery(query)`: Execute ksqlDB query
-- `getKsqlDBInfo()`: Get ksqlDB server info
-- `listKsqlStreams()`: List ksqlDB streams
-- `listKsqlTables()`: List ksqlDB tables
 - `getAllowedTopics()`: Get list of allowed topics (unprefixed)

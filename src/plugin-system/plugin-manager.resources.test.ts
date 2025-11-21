@@ -41,7 +41,7 @@ describe("PluginManagerService - Resource Management", () => {
       const overrides: PluginResourceOverrides = {
         allowedTables: ["custom_users"],
         allowedTopics: ["custom_events"],
-        allowedBuckets: ["custom_data"],
+        allowedBuckets: ["custom-data"],
       };
 
       const plugin = await pluginManager.loadPlugin(pluginPath, overrides);
@@ -248,7 +248,7 @@ describe("PluginManagerService - Resource Management", () => {
       const overrides: PluginResourceOverrides = {
         allowedBuckets: ["data"],
         bucketNameMap: {
-          data: "custom_data_bucket",
+          data: "custom-data-bucket",
         },
       };
 
@@ -256,7 +256,7 @@ describe("PluginManagerService - Resource Management", () => {
 
       // Verify name mapping was stored in overrides
       const stored = pluginManager.getPluginResourceOverrides("example-repository-plugin");
-      expect(stored?.bucketNameMap).toEqual({ data: "custom_data_bucket" });
+      expect(stored?.bucketNameMap).toEqual({ data: "custom-data-bucket" });
     });
   });
 

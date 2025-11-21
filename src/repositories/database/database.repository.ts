@@ -1,15 +1,7 @@
-import type { Kysely } from "kysely";
-import type { Database } from "../../services/database/database.types.js";
-
 /**
  * Restricted database repository that only allows access to specific tables
  */
 export interface DatabaseRepository {
-  /**
-   * Get the Kysely instance (restricted to allowed tables)
-   */
-  getDb(): Kysely<Database>;
-
   /**
    * Execute a raw SQL query (restricted to allowed tables)
    * @param querySql SQL query with parameterized placeholders ($1, $2, etc.)

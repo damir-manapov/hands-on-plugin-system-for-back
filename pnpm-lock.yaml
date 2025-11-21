@@ -37,6 +37,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      zod:
+        specifier: ^4.1.12
+        version: 4.1.12
     devDependencies:
       "@eslint/js":
         specifier: ^9.39.1
@@ -3286,6 +3289,12 @@ packages:
       }
     engines: { node: ">=10" }
 
+  zod@4.1.12:
+    resolution:
+      {
+        integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==,
+      }
+
 snapshots:
   "@aws-crypto/crc32@5.2.0":
     dependencies:
@@ -5557,3 +5566,5 @@ snapshots:
   xtend@4.0.2: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@4.1.12: {}

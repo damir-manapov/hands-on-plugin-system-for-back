@@ -90,3 +90,15 @@ export class DependencyResolutionError extends PluginError {
 
   public readonly unresolvedPlugins: string[];
 }
+
+export class InvalidNamingConventionError extends PluginError {
+  constructor(pluginName: string | undefined, resourceType: string, message: string) {
+    super(
+      `Invalid ${resourceType} naming convention for plugin '${pluginName || "unknown"}': ${message}`,
+      pluginName
+    );
+    this.resourceType = resourceType;
+  }
+
+  public readonly resourceType: string;
+}

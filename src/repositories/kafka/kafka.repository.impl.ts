@@ -101,22 +101,6 @@ export class KafkaRepositoryImpl implements KafkaRepository {
     return this.kafkaService.executeKsqlStatement(statement);
   }
 
-  async executeKsqlQuery(query: string): Promise<unknown> {
-    return this.kafkaService.executeKsqlQuery(query);
-  }
-
-  async getKsqlDBInfo(): Promise<unknown> {
-    return this.kafkaService.getKsqlDBInfo();
-  }
-
-  async listKsqlStreams(): Promise<unknown> {
-    return this.kafkaService.listKsqlStreams();
-  }
-
-  async listKsqlTables(): Promise<unknown> {
-    return this.kafkaService.listKsqlTables();
-  }
-
   getAllowedTopics(): string[] {
     // Return unprefixed topic names to plugins
     return Array.from(this.allowedTopics).map((t) => t.replace(`${this.pluginSlug}_`, ""));

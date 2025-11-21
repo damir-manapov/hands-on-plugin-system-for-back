@@ -47,26 +47,6 @@ export interface KafkaRepository {
   executeKsqlStatement(statement: string): Promise<unknown>;
 
   /**
-   * Execute a ksqlDB query
-   */
-  executeKsqlQuery(query: string): Promise<unknown>;
-
-  /**
-   * Get ksqlDB server info
-   */
-  getKsqlDBInfo(): Promise<unknown>;
-
-  /**
-   * List ksqlDB streams
-   */
-  listKsqlStreams(): Promise<unknown>;
-
-  /**
-   * List ksqlDB tables
-   */
-  listKsqlTables(): Promise<unknown>;
-
-  /**
    * Get the list of allowed topic names
    */
   getAllowedTopics(): string[];

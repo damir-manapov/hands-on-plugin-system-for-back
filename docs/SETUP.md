@@ -117,7 +117,7 @@ export default {
       console.log("Allowed tables:", tables);
 
       // Use Kysely query builder (restricted to allowed tables)
-      const db = context.database.getDb();
+      // Execute queries using executeQuery()
       // Tables are automatically prefixed: "my-plugin_users"
       const users = await db.selectFrom("users").selectAll().execute();
 
@@ -162,8 +162,7 @@ export default {
         );
       `);
 
-      const streams = await context.kafka.listKsqlStreams();
-      const tables = await context.kafka.listKsqlTables();
+      // Use executeKsqlStatement() for ksqlDB operations
     }
   },
 };

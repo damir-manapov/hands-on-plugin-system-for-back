@@ -1,8 +1,6 @@
 import { Logger } from "@nestjs/common";
 import type { DatabaseRepository } from "./database.repository.js";
 import type { DatabaseService } from "../../services/database/database.service.js";
-import type { Kysely } from "kysely";
-import type { Database } from "../../services/database/database.types.js";
 import { TableAccessDeniedError } from "./database.errors.js";
 
 /**
@@ -118,12 +116,6 @@ export class DatabaseRepositoryImpl implements DatabaseRepository {
         throw new TableAccessDeniedError(table, unprefixedAllowed);
       }
     }
-  }
-
-  getDb(): Kysely<Database> {
-    // Return the database instance - Kysely will enforce table access through TypeScript types
-    // but we can't fully restrict runtime access, so this is a best-effort approach
-    return this.databaseService.getDb();
   }
 
   async executeQuery<T = unknown>(
