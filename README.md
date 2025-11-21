@@ -2,7 +2,7 @@
 
 Researching plugin system on backend built with NestJS. Plugins are **not** NestJS modules - they are simple JavaScript/TypeScript modules that can be loaded at runtime.
 
-> See [THOUGHTS.md](./THOUGHTS.md) for ideas and concepts from [thoughts-on-plugin-based-system](https://github.com/damir-manapov/thoughts-on-plugin-based-system)
+> See [THOUGHTS.md](./docs/THOUGHTS.md) for ideas and concepts from [thoughts-on-plugin-based-system](https://github.com/damir-manapov/thoughts-on-plugin-based-system)
 
 ## Features
 
@@ -53,7 +53,14 @@ Reset services (⚠️ removes all data):
 pnpm run compose:reset
 ```
 
-See [SETUP.md](./SETUP.md) for detailed setup instructions.
+See [SETUP.md](./docs/SETUP.md) for detailed setup instructions.
+
+## Documentation
+
+- **[SETUP.md](./docs/SETUP.md)** - Setup guide for S3, PostgreSQL, and Kafka services
+- **[RUNTIME_PLUGINS.md](./docs/RUNTIME_PLUGINS.md)** - Complete guide to the runtime plugin system
+- **[PLUGIN_RESOURCES.md](./docs/PLUGIN_RESOURCES.md)** - Resource restrictions and access control guide
+- **[THOUGHTS.md](./docs/THOUGHTS.md)** - Ideas and concepts behind the plugin system
 
 ## Development
 
