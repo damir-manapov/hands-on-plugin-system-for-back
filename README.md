@@ -4,6 +4,17 @@ Researching plugin system on backend built with NestJS. Plugins are **not** Nest
 
 > See [THOUGHTS.md](./docs/THOUGHTS.md) for ideas and concepts from [thoughts-on-plugin-based-system](https://github.com/damir-manapov/thoughts-on-plugin-based-system)
 
+## ToDo
+
+* lets instead of "const unprefixedAllowed = Array.from(this.allowedTables).map((t) =>
+          t.replace(`${this.pluginSlug}_`, "")
+        );" use object with loigical and phisical name. and use that approach for all repositories
+* Db shouldn't allow to work with tables that are not allowed to given plugin
+* If any repo trying to use not allowed resourse it should throw error
+* Code hooks
+* Handlers
+* Exposed endpoints
+
 ## Features
 
 - **NestJS-based**: Core system built with NestJS framework
